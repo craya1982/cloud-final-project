@@ -3,6 +3,7 @@ const router = express.Router();
 const axios = require('axios');
 const datastore = require('../datastore/datastore');
 const config = require('../gcloud_keys');
+const auth = require('../auth/authentication');
 
 //oAuth items
 const clientId = config.client_id;
@@ -10,8 +11,7 @@ const secret = config.secret;
 const scope = "https://www.googleapis.com/auth/userinfo.profile email";
 const redirect_uri = "https://lucc-gae-final.appspot.com/login";
 
-const {OAuth2Client} = require('google-auth-library');
-const client = new OAuth2Client(clientId);
+
 
 //Other routes
 router.get('/', function (req, res) {
@@ -29,7 +29,7 @@ router.get('/privacy', function (req, res) {
 //oAuth2 route -- starts flow
 router.get('/oauth2', async function (req, res) {
     let key = datastore.DATASTORE.key(datastore.STATE);
-    let state = {"value": makeStateCode()};
+    let state = {"value": auth.make_state_code()};
     await datastore.DATASTORE.save({
         "key": key,
         "data": state
@@ -81,7 +81,7 @@ router.get('/login', async function (req, res) {
             redirect_uri: redirect_uri,
             grant_type: "authorization_code"
         });
-        let sub = await verify_and_extract_sub(response.data.id_token);
+        let sub = await auth.verify_and_extract_sub(response.data.id_token);
 
         if (sub === null || sub === undefined) {
             throw Error("Unexpected error verifying JWT")
@@ -117,34 +117,5 @@ async function add_sub_to_datastore_if_not_present(sub) {
     }
 }
 
-function makeStateCode() {
-    let result = '';
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const charactersLength = characters.length;
-    for (let i = 0; i < 10; i++) {
-        result += characters.charAt(Math.floor(Math.random() * charactersLength));
-    }
-    return result;
-}
 
-async function verify_and_extract_sub(token) {
-
-    const ticket = await client.verifyIdToken({
-        idToken: token,
-        audience: clientId
-    }).catch(e => null);
-
-    if (ticket === null || ticket === undefined) {
-        return null
-    }
-
-    const payload = ticket.getPayload();
-    return payload['sub'];
-    // If request specified a G Suite domain:
-    //const domain = payload['hd'];
-}
-
-module.exports = {
-    router: router,
-    verify_and_extract_sub: verify_and_extract_sub
-};
+module.exports = router;
