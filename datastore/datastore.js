@@ -6,7 +6,7 @@ const USER = "users";
 const LOADS = "loads";
 const BOATS = "boats";
 
-const BASE_URL = "http://adslkgj/";
+const BASE_URL = "https://lucc-gae-final.appspot.com/";
 
 //Returns a specified user
 function get_user(id) {
@@ -15,12 +15,11 @@ function get_user(id) {
 }
 
 //Validates that all required params are included in the request
-function validate_boat_params(req, sub) {
+function validate_boat_params(req) {
     return !(req.body === null || req.body === undefined || req.body.name === null ||
-        req.body.name === undefined || typeof req.body.name !== "string" ||
-        !req.body.name.matches(/^[A-Za-z]+$/) || req.body.type === null || req.body.type ===
+        req.body.name === undefined || req.body.type === null || req.body.type ===
         undefined || req.body.length === null || req.body.length === undefined ||
-        isNaN(req.body.length) || req.body.owner !== sub);
+        isNaN(req.body.length));
 }
 
 //Validates that all provided params are valid AND that at least one is present
@@ -45,18 +44,6 @@ function validate_all_provided_boat_params_valid(req, sub) {
     return minimumParamsPresent;
 }
 
-//Checks if a boat name already exists
-//Returns true if so, false otherwise
-async function check_if_boat_name_unique(name) {
-    let boats = await get_boats();
-    for (let boat of boats) {
-        if (boat.name === `${name}`) {
-            return false
-        }
-    }
-    return true
-}
-
 function post_boat(name, type, length, owner) {
     var key = datastore.key(BOATS);
     const new_boat = {
@@ -68,16 +55,53 @@ function post_boat(name, type, length, owner) {
     return datastore.save({"key": key, "data": new_boat}).then(() => key);
 }
 
-//Returns all boats
-function get_boats() {
-    const q = datastore.createQuery(BOATS);
-    return datastore.runQuery(q).then(entities => entities[0].map(fromBoatDatastore));
+async function get_boats_by_owner(sub) {
+    const q = datastore.createQuery(BOATS).filter('owner', '=', sub);
+    return datastore.runQuery(q).then(async entities => {
+        var results = [];
+        for (var boat of entities[0]) {
+            results.push(await fromBoatDatastore(boat))
+        }
+        return results;
+    });
+}
+
+async function get_boats_paged(req) {
+    var q = datastore.createQuery(BOATS).limit(5);
+    var count = (await datastore.runQuery(datastore.createQuery(BOATS)))[0].length;
+
+    const results = {};
+    var prev;
+    if (Object.keys(req.query).includes("cursor")) {
+        prev = req.protocol + "://" + req.get("host") + req.baseUrl + "?cursor=" + req.query.cursor;
+        q = q.start(req.query.cursor);
+    }
+    return datastore.runQuery(q).then(async (entities) => {
+        results.items = [];
+        results.total_records = count;
+        for (boat of entities[0]) {
+            results.items.push(await fromBoatDatastore(boat));
+        }
+
+        if (entities[1].moreResults !== Datastore.NO_MORE_RESULTS) {
+            results.next = req.protocol + "://" + req.get("host") + req.baseUrl + "?cursor=" +
+                entities[1].endCursor;
+        }
+        return results;
+    });
 }
 
 //Returns a specified boat
-function get_boat(id, sub) {
-    const key = datastore.key([BOATS, parseInt(id, 10)]);
-    return datastore.get(key).then(data => fromBoatDatastore(data[0]));
+function get_boat(id) {
+    if (isNaN(id)) {
+        return Promise.resolve(null)
+    }
+    try {
+        const key = datastore.key([BOATS, parseInt(id, 10)]);
+        return datastore.get(key).then(data => fromBoatDatastore(data[0]));
+    } catch (e) {
+        return Promise.resolve(null)
+    }
 }
 
 //Modifies all fields on the specified boat
@@ -111,11 +135,104 @@ function delete_boat(id) {
 }
 
 //Appends id and self to a datastore item before sending them to the client
-function fromBoatDatastore(item) {
+async function fromBoatDatastore(item) {
     if (item === null || item === undefined) return item;
     item.id = item[Datastore.KEY].id;
     item.self = `${BASE_URL}${BOATS}/${item.id}`;
+
+    let query = datastore.createQuery(LOADS).filter('current_boat', '=', item.id);
+    let results = await datastore.runQuery(query);
+    item.loads = [];
+
+    if (results !== undefined && results !== null && results[0] !== null && results[0] !==
+        undefined && results[0].length !== 0) {
+        for (let result of results[0]) {
+            item.loads.push(result);
+        }
+    }
+
     return item;
+}
+
+
+/* SLIP DATASTORE METHODS */
+function fromLoadDatastore(item) {
+    item.id = item[Datastore.KEY].id;
+    item.self = `${BASE_URL}${LOADS}/${item.id}`;
+    return item;
+}
+
+function validate_load_items(req) {
+    return !(req.body === null || req.body === undefined || req.body.weight === null ||
+        req.body.weight === undefined || isNaN(req.body.weight) || req.body.contents === null ||
+        req.body.contents === undefined || req.body.origin === null || req.body.origin ===
+        undefined);
+}
+
+function validate_all_provided_load_params_valid(req) {
+    let minimumParamsPresent = false;
+    if (req.body !== null && req.body !== undefined) {
+        if (req.body.contents !== null && req.body.contents !== undefined) {
+            minimumParamsPresent = true;
+        }
+        if (req.body.weight !== null && req.body.weight !== undefined) {
+            minimumParamsPresent = !isNaN(req.body.weight);
+        }
+        if (req.body.origin !== null && req.body.length !== origin) {
+            //Invalidate flag if length is NaN
+            minimumParamsPresent = true;
+        }
+    }
+    return minimumParamsPresent;
+}
+
+
+function post_load(weight, contents, origin) {
+    const key = datastore.key(LOADS);
+    const new_load = {
+        "weight": Number(weight),
+        "current_boat": null,
+        "origin": `${origin}`,
+        "contents": `${contents}`
+    };
+    return datastore.save({"key": key, "data": new_load}).then(() => key);
+}
+
+function get_load(load_id) {
+    const key = datastore.key([LOADS, parseInt(load_id, 10)]);
+    return datastore.get(key).then(entities => fromLoadDatastore(entities[0]));
+}
+
+function get_loads() {
+    const q = datastore.createQuery(LOADS);
+    return datastore.runQuery(q).then(entities => entities[0].map(fromLoadDatastore));
+}
+
+function delete_load(id) {
+    const key = datastore.key([LOADS, parseInt(id, 10)]);
+    return datastore.delete(key);
+}
+
+function patch_load(id, weight, origin, contents, load) {
+    const key = datastore.key([LOADS, parseInt(id, 10)]);
+    const modified_load = {
+        "weight": weight !== null && weight !== undefined ? Number(weight) : load.weight,
+        "origin": origin !== null && origin !== undefined ? `${origin}` : load.origin,
+        "contents": contents !== null && contents !== undefined ? `${contents}` : load.contents,
+        "current_boat": load.current_boat
+    };
+    return datastore.save({"key": key, "data": modified_load}).then(() => key);
+}
+
+function put_load(id, weight, origin, contents, load) {
+    const key = datastore.key([LOADS, parseInt(id, 10)]);
+    const modified_load = {
+        "weight": Number(weight),
+        "origin": `${origin}`,
+        "contents": `${contents}`,
+        "current_boat": load.current_boat
+    };
+    return datastore.save({"key": key, "data": modified_load}).then(() => key);
 }
 
 module.exports = {
@@ -127,12 +244,20 @@ module.exports = {
     KEY: datastore.KEY,
     get_user: get_user,
     validate_boat_params: validate_boat_params,
-    check_if_boat_name_unique: check_if_boat_name_unique,
     post_boat: post_boat,
     get_boat: get_boat,
     validate_all_provided_boat_params_valid: validate_all_provided_boat_params_valid,
     patch_boat: patch_boat,
-    get_boats: get_boats,
+    get_boats_paged: get_boats_paged,
+    get_boats_by_owner: get_boats_by_owner,
     put_boat: put_boat,
-    delete_boat: delete_boat
+    delete_boat: delete_boat,
+    validate_load_items: validate_load_items,
+    validate_all_provided_load_params_valid: validate_all_provided_load_params_valid,
+    post_load: post_load,
+    get_load: get_load,
+    get_loads: get_loads,
+    delete_load: delete_load,
+    patch_load: patch_load,
+    put_load: put_load
 };

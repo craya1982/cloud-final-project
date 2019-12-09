@@ -1,6 +1,6 @@
 const config = require('../gcloud_keys');
 const {OAuth2Client} = require('google-auth-library');
-const client = new OAuth2Client(clientId);
+const client = new OAuth2Client(config.client_id);
 
 function make_state_code() {
     let result = '';
@@ -16,8 +16,9 @@ async function verify_and_extract_sub(token) {
 
     const ticket = await client.verifyIdToken({
                                                   idToken: token,
-                                                  audience: clientId
-                                              }).catch(e => null);
+                                                  audience: config.client_id
+                                              })
+                               .catch(e => null);
 
     if (ticket === null || ticket === undefined) {
         return null
@@ -30,6 +31,6 @@ async function verify_and_extract_sub(token) {
 }
 
 module.exports = {
-    make_state_code: make_state_code(),
+    make_state_code: make_state_code,
     verify_and_extract_sub: verify_and_extract_sub
 };
