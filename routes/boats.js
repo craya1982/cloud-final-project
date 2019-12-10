@@ -44,25 +44,31 @@ router.put('/:id', async function (req, res) {
         res.status(401).send("Invalid jwt");
     }
     else if (data.validate_boat_params(req)) {
-        data.get_boat(req.params.id)
-            .then(boat => {
-                if (boat === null || boat === undefined) {
-                    res.status(404).end();
-                }
-                else if (boat.owner !== sub) {
-                    res.status(403).send("Invalid owner");
-                }
-                else {
-                    return data.put_boat(req.params.id, req.body.name,
-                                         req.body.type,
-                                         req.body.length, sub)
-                               .then(key => data.get_boat(key.id))
-                               .then(boat => {
-                                   res.location(boat.self);
-                                   res.status(303).end();
-                               });
-                }
-            })
+        let sub_present = await data.get_user(sub) !== null;
+        if (sub_present) {
+            data.get_boat(req.params.id)
+                .then(boat => {
+                    if (boat === null || boat === undefined) {
+                        res.status(404).end();
+                    }
+                    else if (boat.owner !== sub) {
+                        res.status(403).send("Invalid owner");
+                    }
+                    else {
+                        return data.put_boat(req.params.id, req.body.name,
+                                             req.body.type,
+                                             req.body.length, sub)
+                                   .then(key => data.get_boat(key.id))
+                                   .then(boat => {
+                                       res.location(boat.self);
+                                       res.status(303).end();
+                                   });
+                    }
+                })
+        }
+        else {
+            res.status(401).send("Invalid jwt");
+        }
     }
     else {
         res.status(400).send("Invalid body parameters");
@@ -83,25 +89,31 @@ router.patch('/:id', async function (req, res) {
         res.status(401).send("Invalid jwt");
     }
     else if (data.validate_all_provided_boat_params_valid(req, sub)) {
-        data.get_boat(req.params.id)
-            .then(boat => {
-                if (boat === null || boat === undefined) {
-                    res.status(404).end();
-                }
-                else if (boat.owner !== sub) {
-                    res.status(403).send("Invalid owner");
-                }
-                else {
-                    return data.patch_boat(req.params.id, req.body.name,
-                                           req.body.type,
-                                           req.body.length, boat)
-                               .then(key => data.get_boat(key.id))
-                               .then(boat => {
-                                   res.location(boat.self);
-                                   res.status(200).json(boat);
-                               });
-                }
-            })
+        let sub_present = await data.get_user(sub) !== null;
+        if (sub_present) {
+            data.get_boat(req.params.id)
+                .then(boat => {
+                    if (boat === null || boat === undefined) {
+                        res.status(404).end();
+                    }
+                    else if (boat.owner !== sub) {
+                        res.status(403).send("Invalid owner");
+                    }
+                    else {
+                        return data.patch_boat(req.params.id, req.body.name,
+                                               req.body.type,
+                                               req.body.length, boat)
+                                   .then(key => data.get_boat(key.id))
+                                   .then(boat => {
+                                       res.location(boat.self);
+                                       res.status(200).json(boat);
+                                   });
+                    }
+                })
+        }
+        else {
+            res.status(401).send("Invalid JWT");
+        }
     }
     else {
         res.status(400).send("Invalid body parameters");
@@ -134,9 +146,15 @@ router.get('/', async function (req, res) {
     }
     else {
         if (sub !== null && sub !== undefined) {
-            data.get_boats_by_owner(sub).then((boats) => {
-                res.status(200).json(boats)
-            }).catch(error => res.send(error));
+            let sub_present = await data.get_user(sub) !== null;
+            if (sub_present) {
+                data.get_boats_by_owner(sub).then((boats) => {
+                    res.status(200).json(boats)
+                }).catch(error => res.send(error));
+            }
+            else {
+                res.status(401).send("Invalid account");
+            }
         }
         else {
             data.get_boats_paged(req).then((boats) => {
@@ -153,19 +171,25 @@ router.delete('/:id', async function (req, res) {
         res.status(401).send("Invalid jwt");
     }
     else {
-        data.get_boat(req.params.id)
-            .then(boat => {
-                if (boat === undefined || boat === null) {
-                    throw Error("Not found for some reason");
-                }
-                else if (boat.owner === sub) {
-                    return data.delete_boat(boat.id)
-                }
-                else {
-                    res.status(403).send("Owner of boat doesn't match JWT");
-                }
-            }).then(() => res.status(204).end())
-            .catch(() => res.status(404).json({"Error": "No boat with this boat_id exists"}));
+        let sub_present = await data.get_user(sub) !== null;
+        if (sub_present) {
+            data.get_boat(req.params.id)
+                .then(boat => {
+                    if (boat === undefined || boat === null) {
+                        throw Error("Not found for some reason");
+                    }
+                    else if (boat.owner === sub) {
+                        return data.delete_boat(boat.id)
+                    }
+                    else {
+                        res.status(403).send("Owner of boat doesn't match JWT");
+                    }
+                }).then(() => res.status(204).end())
+                .catch(() => res.status(404).json({"Error": "No boat with this boat_id exists"}));
+        }
+        else {
+            res.status(401).send("Invalid account");
+        }
     }
 });
 

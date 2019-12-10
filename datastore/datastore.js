@@ -129,8 +129,15 @@ function patch_boat(id, name, type, length, boat) {
 }
 
 //Removes a boat from the data store
-function delete_boat(id) {
+async function delete_boat(id) {
     const key = datastore.key([BOATS, parseInt(id, 10)]);
+    const q = datastore.createQuery(LOADS).filter('current_boat', '=', id);
+    await datastore.runQuery(q).then(entities => {
+        for (var load of entities[0]) {
+            remove_load_from_boat(fromLoadDatastore((load)));
+        }
+    });
+
     return datastore.delete(key);
 }
 
@@ -147,18 +154,22 @@ async function fromBoatDatastore(item) {
     if (results !== undefined && results !== null && results[0] !== null && results[0] !==
         undefined && results[0].length !== 0) {
         for (let result of results[0]) {
-            item.loads.push(result);
+            let load = fromLoadDatastore(result);
+            item.loads.push({"id": load.id, "self": load.self});
         }
     }
 
     return item;
 }
 
-
-/* SLIP DATASTORE METHODS */
+/* LOADS DATASTORE METHODS */
 function fromLoadDatastore(item) {
     item.id = item[Datastore.KEY].id;
     item.self = `${BASE_URL}${LOADS}/${item.id}`;
+    if (item.current_boat !== null && item.current_boat !== undefined) {
+        item.current_boat =
+            {"id": item.current_boat, "self": `${BASE_URL}${BOATS}/${item.current_boat}`};
+    }
     return item;
 }
 
@@ -242,6 +253,28 @@ function put_load(id, weight, origin, contents, load) {
     return datastore.save({"key": key, "data": modified_load}).then(() => key);
 }
 
+function put_load_on_boat(load, boat_id) {
+    const key = datastore.key([LOADS, parseInt(load.id, 10)]);
+    const modified_load = {
+        "weight": load.weight,
+        "origin": load.origin,
+        "contents": load.contents,
+        "current_boat": boat_id
+    };
+    return datastore.save({"key": key, "data": modified_load}).then(() => key);
+}
+
+function remove_load_from_boat(load) {
+    const key = datastore.key([LOADS, parseInt(load.id, 10)]);
+    const modified_load = {
+        "weight": load.weight,
+        "origin": load.origin,
+        "contents": load.contents,
+        "current_boat": null
+    };
+    return datastore.save({"key": key, "data": modified_load}).then(() => key);
+}
+
 module.exports = {
     USER: USER,
     STATE: STATE,
@@ -266,5 +299,7 @@ module.exports = {
     get_loads: get_loads,
     delete_load: delete_load,
     patch_load: patch_load,
-    put_load: put_load
+    put_load: put_load,
+    put_load_on_boat: put_load_on_boat,
+    remove_load_from_boat: remove_load_from_boat
 };

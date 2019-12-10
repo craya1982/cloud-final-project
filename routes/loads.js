@@ -62,6 +62,63 @@ router.put('/:id', async function (req, res) {
     }
 });
 
+//Assigns a load to a boat
+router.put('/:id/boat/:boat_id', async function (req, res) {
+    const accepts = req.accepts(['application/json']);
+    if (!accepts) {
+        res.status(406).send('Must accept JSON responses');
+    }
+    else {
+        data.get_load(req.params.id)
+            .then(load => {
+                if (load === null || load === undefined) {
+                    res.status(404).end();
+                }
+                else {
+                    return data.get_boat(req.params.boat_id)
+                               .then(boat => {
+                                   if (boat === null || boat === undefined) {
+                                       res.status(404).end();
+                                   }
+                                   else {
+                                       data.put_load_on_boat(load, boat.id)
+                                           .then(key => data.get_load(key.id))
+                                           .then((new_load => {
+                                               res.location(new_load.self);
+                                               res.status(201).json(new_load);
+                                           }));
+                                   }
+                               })
+                }
+            })
+            .catch((e) => {
+                console.log(e);
+                res.status(404).end()
+            });
+    }
+});
+
+//Removes the load from its assigned boat
+router.delete('/:id/boat/', async function (req, res) {
+
+    data.get_load(req.params.id)
+        .then(load => {
+            if (load === null || load === undefined) {
+                res.status(404).end();
+            }
+            else {
+                data.remove_load_from_boat(load, boat.id)
+                    .then((() => {
+                        res.status(204).end();
+                    }));
+            }
+        })
+        .catch((e) => {
+            res.status(404).end()
+        });
+
+});
+
 router.patch('/:id', async function (req, res) {
     const accepts = req.accepts(['application/json']);
     if (!accepts) {
