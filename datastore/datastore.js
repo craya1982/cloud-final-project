@@ -221,9 +221,31 @@ function get_load(load_id) {
     }
 }
 
-function get_loads() {
-    const q = datastore.createQuery(LOADS);
-    return datastore.runQuery(q).then(entities => entities[0].map(fromLoadDatastore));
+async function get_loads(req) {
+
+    var q = datastore.createQuery(LOADS).limit(5);
+    var count = (await datastore.runQuery(datastore.createQuery(LOADS)))[0].length;
+
+    const results = {};
+    var prev;
+    if (Object.keys(req.query).includes("cursor")) {
+        prev = req.protocol + "://" + req.get("host") + req.baseUrl + "?cursor=" + req.query.cursor;
+        q = q.start(req.query.cursor);
+    }
+    return datastore.runQuery(q).then((entities) => {
+        results.items = [];
+        results.total_records = count;
+        for (var load of entities[0]) {
+            results.items.push(fromLoadDatastore(load));
+        }
+
+        if (entities[1].moreResults !== Datastore.NO_MORE_RESULTS) {
+            results.next = req.protocol + "://" + req.get("host") + req.baseUrl + "?cursor=" +
+                entities[1].endCursor;
+        }
+        return results;
+    });
+
 }
 
 function delete_load(id) {

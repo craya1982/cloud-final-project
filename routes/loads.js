@@ -171,15 +171,15 @@ router.get('/:id', function (req, res) {
     }
 });
 
-router.get('/', function (req, res) {
+router.get('/', async function (req, res) {
     const accepts = req.accepts(['application/json']);
     if (!accepts) {
         res.status(406).send('Must accept JSON responses');
     }
     else {
-        data.get_loads()
-            .then((loads) => res.status(200).json(loads))
-            .catch(error => res.status(500).send(error));
+        await data.get_loads(req)
+                  .then((loads) => res.status(200).json(loads))
+                  .catch(error => res.status(500).send(error));
     }
 });
 
