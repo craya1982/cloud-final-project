@@ -11,17 +11,87 @@ router.post('/', function (req, res) {
         res.status(415).send('Server only accepts application/json data.');
     }
     else if (!data.validate_load_items(req)) {
-        res.status(400).json({"Error": "The request object is missing the required number"});
+        res.status(400).send("Invalid body parameters");
     }
     else {
         data.post_load(req.body.weight, req.body.contents, req.body.origin)
             .then(key => data.get_load(key.id))
             .then(load => {
-                if (load === undefined || load === null) throw Error("Not found for some reason");
-                res.status(201).json(load)
+                if (load === undefined || load === null) {
+                    res.status(404).end();
+                }
+                else {
+                    res.location(load.self);
+                    res.status(201).json(load);
+                }
             })
-            .catch(() => res.status(400)
-                            .json({"Error": "The request object is missing the required number"}));
+            .catch((e) => {
+                console.log(e);
+                res.status(500)
+                   .send("Server Error")
+            });
+    }
+});
+
+router.put('/:id', async function (req, res) {
+    if (req.get('content-type') !== 'application/json') {
+        res.status(415).send('Server only accepts application/json data.');
+    }
+    else if (data.validate_load_items(req)) {
+        data.get_load(req.params.id)
+            .then(load => {
+                if (load === null || load === undefined) {
+                    res.status(404).end();
+                }
+                else {
+                    return data.put_load(req.params.id, req.body.weight, req.body.contents,
+                                         req.body.origin, load)
+                               .then(key => data.get_load(key.id))
+                               .then(load => {
+                                   res.location(load.self);
+                                   res.status(303).end();
+                               });
+                }
+            })
+            .catch(() => {
+                res.status(404).end()
+            });
+    }
+    else {
+        res.status(400).send("Invalid body parameters");
+    }
+});
+
+router.patch('/:id', async function (req, res) {
+    const accepts = req.accepts(['application/json']);
+    if (!accepts) {
+        res.status(406).send('Must accept JSON responses');
+    }
+    else if (req.get('content-type') !== 'application/json') {
+        res.status(415).send('Server only accepts application/json data.');
+    }
+    else if (data.validate_all_provided_load_params_valid(req)) {
+        data.get_load(req.params.id)
+            .then(load => {
+                if (load === null || load === undefined) {
+                    res.status(404).end();
+                }
+                else {
+                    return data.patch_load(req.params.id, req.body.name,
+                                           req.body.type,
+                                           req.body.length,
+                                           load)
+                               .then(key => data.get_load(key.id))
+                               .then(load => {
+                                   res.location(load.self);
+                                   res.status(200).json(load);
+                               })
+                               .catch(() => res.status(404).end());
+                }
+            })
+    }
+    else {
+        res.status(400).send("Invalid body parameters");
     }
 });
 
@@ -33,8 +103,12 @@ router.get('/:id', function (req, res) {
     else {
         data.get_load(req.params.id)
             .then(load => {
-                if (load === undefined || load === null) throw Error("Not found");
-                res.status(200).send(load)
+                if (load === undefined || load === null) {
+                    res.status(404).end();
+                }
+                else {
+                    res.status(200).send(load)
+                }
             })
             .catch(() => res.status(404).json({"Error": "No load with this load_id exists"}));
     }
@@ -59,10 +133,21 @@ router.delete('/:id', function (req, res) {
                 res.status(404).json(
                     {"Error": "No load with this load_id exists"});
             }
-            return data.delete_load(load.id)
+            else {
+                return data.delete_load(load.id);
+            }
         }).then(() => res.status(204).end())
         .catch(() => res.status(500).send("Server error"));
 });
 
+router.delete('/', function (req, res) {
+    res.set('Accept', 'GET');
+    res.status(405).end();
+});
+
+router.put('/', function (req, res) {
+    res.set('Accept', 'GET, POST');
+    res.status(405).end();
+});
 
 module.exports = router;

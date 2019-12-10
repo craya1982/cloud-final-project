@@ -1,6 +1,7 @@
 const express = require('express');
-const oauth = require('./routes/oauth.js');
+const oauth = require('./routes/oauth');
 const boats = require('./routes/boats');
+const loads = require('./routes/loads');
 const bodyParser = require('body-parser');
 
 const app = express();
@@ -11,6 +12,7 @@ app.use(bodyParser.json());
 
 app.use("/", oauth);
 app.use('/boats', boats);
+app.use('/loads', loads);
 
 app.use(function (err, req, res, next) {
     console.error(err.stack);

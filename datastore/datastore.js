@@ -11,7 +11,7 @@ const BASE_URL = "https://lucc-gae-final.appspot.com/";
 //Returns a specified user
 function get_user(id) {
     const key = datastore.key([USER, parseInt(id, 10)]);
-    return datastore.get(key);
+    return datastore.get(key).then(user => user[0]);
 }
 
 //Validates that all required params are included in the request
@@ -178,7 +178,7 @@ function validate_all_provided_load_params_valid(req) {
         if (req.body.weight !== null && req.body.weight !== undefined) {
             minimumParamsPresent = !isNaN(req.body.weight);
         }
-        if (req.body.origin !== null && req.body.length !== origin) {
+        if (req.body.origin !== null && req.body.origin !== undefined) {
             //Invalidate flag if length is NaN
             minimumParamsPresent = true;
         }
@@ -199,8 +199,15 @@ function post_load(weight, contents, origin) {
 }
 
 function get_load(load_id) {
-    const key = datastore.key([LOADS, parseInt(load_id, 10)]);
-    return datastore.get(key).then(entities => fromLoadDatastore(entities[0]));
+    if (isNaN(load_id)) {
+        return Promise.resolve(null)
+    }
+    try {
+        const key = datastore.key([LOADS, parseInt(load_id, 10)]);
+        return datastore.get(key).then(entities => fromLoadDatastore(entities[0]));
+    } catch (e) {
+        return Promise.resolve(null)
+    }
 }
 
 function get_loads() {

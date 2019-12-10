@@ -19,12 +19,18 @@ router.post('/', async function (req, res) {
         res.status(400).send("Invalid body parameters");
     }
     else {
-        return data.post_boat(req.body.name, req.body.type, req.body.length, sub)
-                   .then(key => data.get_boat(key.id))
-                   .then(boat => {
-                       res.location(boat.self);
-                       res.status(201).json(boat);
-                   });
+        let sub_present = await data.get_user(sub) !== null;
+        if (sub_present) {
+            return data.post_boat(req.body.name, req.body.type, req.body.length, sub)
+                       .then(key => data.get_boat(key.id))
+                       .then(boat => {
+                           res.location(boat.self);
+                           res.status(201).json(boat);
+                       });
+        }
+        else {
+            res.status(401).send("User must register");
+        }
     }
 });
 
@@ -66,7 +72,11 @@ router.put('/:id', async function (req, res) {
 //Modifies only provided fields on a boat in the data store
 router.patch('/:id', async function (req, res) {
     let sub = await auth.verify_and_extract_sub(get_authorization_header(req)).catch(() => null);
-    if (req.get('content-type') !== 'application/json') {
+    const accepts = req.accepts(['application/json']);
+    if (!accepts) {
+        res.status(406).send('Must accept JSON responses');
+    }
+    else if (req.get('content-type') !== 'application/json') {
         res.status(415).send('Server only accepts application/json data.');
     }
     else if (sub === null || sub === undefined) {
@@ -157,6 +167,16 @@ router.delete('/:id', async function (req, res) {
             }).then(() => res.status(204).end())
             .catch(() => res.status(404).json({"Error": "No boat with this boat_id exists"}));
     }
+});
+
+router.delete('/', function (req, res) {
+    res.set('Accept', 'GET');
+    res.status(405).end();
+});
+
+router.put('/', function (req, res) {
+    res.set('Accept', 'GET, POST');
+    res.status(405).end();
 });
 
 function get_authorization_header(req) {
